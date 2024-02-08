@@ -1,0 +1,10 @@
+name: ccenv
+channels:
+  - defaults
+dependencies:
+  - matplotlib
+  - numpy
+  - pandas
+  - vpython
+  - scipy
+prefix: /home/samcv/.conda/envs/ccenv
