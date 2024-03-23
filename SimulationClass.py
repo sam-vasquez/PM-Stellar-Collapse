@@ -1,9 +1,3 @@
-# Python
-from datetime import datetime
-import time 
-import os 
-import sys
-
 # MPL
 import matplotlib        as mpl
 import matplotlib.pyplot as plt
@@ -14,18 +8,12 @@ import numpy.random as random
 import numpy.linalg as linalg
 from numpy import cos, exp, log, pi, sin, sqrt
 
-# SciPy
-import scipy.fft as fft
-import scipy.stats as stats
-from scipy.optimize import curve_fit
-
 # FFTW 0.12.0
 # There currently exists a bug with conda-forge's builds of FFTW 0.13.0+.
 # Version 0.12.0 requires python version 3.10.
 import pyfftw
 
 from mpi4py import MPI
-from pathlib import Path
 
 # Uniform probability distribution functions over spherical coordinates. 
 
@@ -112,7 +100,7 @@ class Grid:
         xc = i2*self.dl # x coordinate of the border between left and right cells
         dx1 = (xc-x1)/self.dl # Percent of particle width contained in left cell
         dx2 = 1 - dx1 # Percent of particle width contained in right cell
-        i2 = np.where(i2 >= Nc, 0, i2) # Enforce periodic boundary conditions by replacing Nc+1 with 0.
+        i2 = np.where(i2 >= self.Nc, 0, i2) # Enforce periodic boundary conditions by replacing Nc+1 with 0.
         # Negative indices should never be generated, and even if they are, they'll automatically index from the end.
         # Indices >Nc+1 should also never be generated mathematically, and the worst case numerical error just barely pushes it to Nc+2.
         # So it should do no harm to replace that with 0 as well.
@@ -135,7 +123,7 @@ class Grid:
         yc = j2*self.dl
         dy1 = (yc-y1)/self.dl
         dy2 = 1 - dy1
-        j2 = np.where(j2 >= Nc, 0, j2)
+        j2 = np.where(j2 >= self.Nc, 0, j2)
 
         self.CIC_inds[2] = j1
         self.CIC_inds[3] = j2
@@ -155,7 +143,7 @@ class Grid:
         zc = k2*self.dl
         dz1 = (zc-z1)/self.dl
         dz2 = 1 - dz1
-        k2 = np.where(k2 >= Nc, 0, k2)
+        k2 = np.where(k2 >= self.Nc, 0, k2)
 
         self.CIC_inds[4] = k1
         self.CIC_inds[5] = k2
@@ -300,7 +288,7 @@ class Grid:
     # This demonstrates the spherical distribution as it maps to the grid.
     # Displays a y-z slice taken from roughly the center of the sphere.
     def display_density(self):
-        plt.imshow(self.rhos[Nc//2].T, extent=[0,self.L,0,self.L], origin='lower', cmap='inferno', alpha=0.9)
+        plt.imshow(self.rhos[self.Nc//2].T, extent=[0,self.L,0,self.L], origin='lower', cmap='inferno', alpha=0.9)
         plt.colorbar(label='Density (kg/m^3)')
         plt.show()
 
@@ -313,7 +301,7 @@ class Grid:
 
         # Get coordinates for each cell center, and calculate their distances from the center of mass.
         celldist = lambda i,j,k : sqrt((cmx - (i+1/2)*self.dl)**2 + (cmy - (j+1/2)*self.dl)**2 + (cmz - (k+1/2)*self.dl)**2)
-        celldists = np.fromfunction(celldist, (Nc,Nc,Nc))
+        celldists = np.fromfunction(celldist, (self.Nc,self.Nc,self.Nc))
 
         # Approximation of the body's radius.
         Rmax = np.max(sqrt((array[0] - cmx)**2 + (array[1] - cmy)**2 + (array[2] - cmz)**2))
@@ -449,19 +437,19 @@ class GravitySimulation:
     def evolve_system(self, T):
         N_T = T // self.dT
         self.initial_step()
-        print(f"Max x vel: {np.max(sim.parts[3])}")
-        print(f"Max x acc: {np.max(sim.parts[6])}")
-        print(f"Recommended time step: {min( (1/128)/ np.max(sim.parts[3]) , sqrt( (1/128) / np.max(sim.parts[6]) ) )}")
+        print(f"Max x vel: {np.max(self.parts[3])}")
+        print(f"Max x acc: {np.max(self.parts[6])}")
+        print(f"Recommended time step: {min( (1/128)/ np.max(self.parts[3]) , sqrt( (1/128) / np.max(self.parts[6]) ) )}")
 
         for _ in range(2,int(N_T)+1):
             self.time_step()
-            print(f"Max x vel: {np.max(sim.parts[3])}")
-            print(f"Max x acc: {np.max(sim.parts[6])}")
-            print(f"Recommended time step: {min( (1/128)/ np.max(sim.parts[3]) , sqrt( (1/128) / np.max(sim.parts[6]) ) )}")
+            print(f"Max x vel: {np.max(self.parts[3])}")
+            print(f"Max x acc: {np.max(self.parts[6])}")
+            print(f"Recommended time step: {min( (1/128)/ np.max(self.parts[3]) , sqrt( (1/128) / np.max(self.parts[6]) ) )}")
         self.final_step()
-        print(f"Max x vel: {np.max(sim.parts[3])}")
-        print(f"Max x acc: {np.max(sim.parts[6])}")
-        print(f"Recommended time step: {min( (1/128)/ np.max(sim.parts[3]) , sqrt( (1/128) / np.max(sim.parts[6]) ) )}")
+        print(f"Max x vel: {np.max(self.parts[3])}")
+        print(f"Max x acc: {np.max(self.parts[6])}")
+        print(f"Recommended time step: {min( (1/128)/ np.max(self.parts[3]) , sqrt( (1/128) / np.max(self.parts[6]) ) )}")
         self.T += N_T*self.dT
         print(f"Advanced simulation by {N_T} time steps. Current time: {self.T} seconds.")
 
@@ -508,39 +496,4 @@ class GravitySimulation:
         plt.tight_layout()
         plt.show()
 
-# argv: Np, sim_time, output_level, output_dir, seed
-if __name__ == "__main__":
-    # Simulation parameters that will be used by all tests.
-
-    # Mp: Mass of each particle. (kg)
-    # L: Side length of the (cubical) simulation space.(m)
-    # RS: Radius of the (spherical) collapsing body. (m)
-    # xc: Center of the body in simulation space. (m)
-    # Nc: Number of cells per axis.
-    # TODO: Move this to a simulation config file. 
-        
-    Mp = 0.1
-    L = 1
-    RS = L/4
-    xc = (L/2, L/2, L/2)
-    Nc = 128
-    
-    if len(sys.argv) < 5:
-        print("Invalid number of arguments.")
-        exit(1)
-
-    Np = int(sys.argv[1])
-    sim_time = int(sys.argv[2])
-    output_dir = os.path.join(os.getcwd(), os.path.normpath(sys.argv[4]))
-
-    s = None
-    if len(sys.argv) >= 6: s = int(sys.argv[5])
-
-    sim = GravitySimulation(Mp, RS, xc, Np, L, Nc, s)
-
-    match int(sys.argv[3]):
-        case 0: # Only print to console. 
-            sim.evolve_system(sim_time)
-       # case 1: # Print to console and output position plots. 
-       # case 2: # Print to console, output plots of position, density, and force. 
 
