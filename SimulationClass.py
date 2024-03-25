@@ -443,17 +443,29 @@ class GravitySimulation:
     # debug: 1 = print time step info to console.
     # Future work - allow reverse evolution. Would that be useful for testing stability?
     def evolve_system(self, sim_time, verbose=1, debug=0):
-        timesteps = int(T // self.dT)
-        snapshot_steps = min(1, timesteps//20)
+        timesteps = int(sim_time // self.dT)
+        snapshot_steps = 5
         
+        for _ in range(timesteps // snapshot_steps):
+            
+            self.initial_step()
+
+            for _ in range(2, snapshot_steps+1):
+                self.time_step()
+
+            self.final_step(debug)
+
+            self.T += snapshot_steps*self.dT 
+
         self.initial_step()
 
-        for _ in range(2,timesteps+1):
+        for _ in range(2, (timesteps % snapshot_steps) + 1):
             self.time_step()
 
         self.final_step(debug)
 
-        self.T += timesteps*self.dT
+        self.T += (timesteps % snapshot_steps)*self.dT
+
         print(f"Advanced simulation by {timesteps} time steps. Current time: {self.T} seconds.")
 
 
