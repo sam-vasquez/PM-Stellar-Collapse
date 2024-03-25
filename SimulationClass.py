@@ -426,32 +426,35 @@ class GravitySimulation:
         # Update acceleration
         self.grid.update_accelerations(self.parts)
 
-    def final_step(self):
+    def final_step(self, debug):
         # One final kick.
         self.parts[3] += self.parts[6] * self.dT/2
         self.parts[4] += self.parts[7] * self.dT/2
         self.parts[5] += self.parts[8] * self.dT/2
 
-    # T: Duration of the simulation, in seconds.
-    # Future work - allow reverse evolution. Would that be useful for testing stability?
-    def evolve_system(self, T):
-        N_T = T // self.dT
-        self.initial_step()
-        print(f"Max x vel: {np.max(self.parts[3])}")
-        print(f"Max x acc: {np.max(self.parts[6])}")
-        print(f"Recommended time step: {min( (1/128)/ np.max(self.parts[3]) , sqrt( (1/128) / np.max(self.parts[6]) ) )}")
-
-        for _ in range(2,int(N_T)+1):
-            self.time_step()
+        if debug:
             print(f"Max x vel: {np.max(self.parts[3])}")
             print(f"Max x acc: {np.max(self.parts[6])}")
             print(f"Recommended time step: {min( (1/128)/ np.max(self.parts[3]) , sqrt( (1/128) / np.max(self.parts[6]) ) )}")
-        self.final_step()
-        print(f"Max x vel: {np.max(self.parts[3])}")
-        print(f"Max x acc: {np.max(self.parts[6])}")
-        print(f"Recommended time step: {min( (1/128)/ np.max(self.parts[3]) , sqrt( (1/128) / np.max(self.parts[6]) ) )}")
-        self.T += N_T*self.dT
-        print(f"Advanced simulation by {N_T} time steps. Current time: {self.T} seconds.")
+
+
+    # sim_time: Duration of the simulation, in seconds.
+    # verbose: 1 = output position visualization, 2 = output other visualizations.
+    # debug: 1 = print time step info to console.
+    # Future work - allow reverse evolution. Would that be useful for testing stability?
+    def evolve_system(self, sim_time, verbose=1, debug=0):
+        timesteps = int(T // self.dT)
+        snapshot_steps = min(1, timesteps//20)
+        
+        self.initial_step()
+
+        for _ in range(2,timesteps+1):
+            self.time_step()
+
+        self.final_step(debug)
+
+        self.T += timesteps*self.dT
+        print(f"Advanced simulation by {timesteps} time steps. Current time: {self.T} seconds.")
 
 
     # A simple plot of the particle distribution in space.
