@@ -1,5 +1,6 @@
 name: ccenv
 channels:
+  - conda-forge
   - defaults
 dependencies:
   - matplotlib
@@ -7,4 +8,9 @@ dependencies:
   - pandas
   - vpython
   - scipy
+  - python==3.10.13
+  - pyfftw=0.12
+  - ipykernel
+  - mpi4py
+  - ipyparallel
 prefix: /home/samcv/.conda/envs/ccenv
