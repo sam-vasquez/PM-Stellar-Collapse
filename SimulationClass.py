@@ -514,9 +514,11 @@ class GravitySimulation:
         plt.suptitle(f'x vs y and y vs z at time T = {self.T} seconds.')
         plt.tight_layout()
 
-        out = f"{output_dir}/output_{self.T}".strip(".")
+        out = f"output_{self.T:03d}.pdf"
 
-        plt.savefig(f"{out}.pdf",format="pdf",dpi=300)
+        out_path = output_dir.joinpath(out)
+
+        plt.savefig(out_path,format="pdf",dpi=300)
         plt.close()
 
 

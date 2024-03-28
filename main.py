@@ -33,18 +33,30 @@ if __name__ == "__main__":
         exit(1)
     verbose_level = int(sys.argv[3])
 
-    output_dir = os.path.join(os.getcwd(), os.path.normpath(sys.argv[4]))
+    output_dir = Path(sys.argv[4]).resolve(strict=False)
+
+    try:
+        output_dir.mkdir(parents=True, exist_ok=True)
+    except PermissionError:
+        print("Permission denied: Unable to create directory at specified path.")
+        exit(1)
+
+    if not os.access(output_dir, os.W_OK):
+        print("Permission denied: Unable to write to the specified directory.")
+        exit(1)
 
     s = None
     if len(sys.argv) >= 6: 
         if not sys.argv[5].isnumeric():
             print("Argument 5 (RNG Seed) must be an integer.")
+            exit(1)
         s = int(sys.argv[5])
 
     debug_flag = 0
     if len(sys.argv) >= 7:
         if not sys.argv[6].isnumeric():
             print("Argument 6 (Debug flag) must be an integer.")
+            exit(1)
         debug_flag = int(sys.argv[6])
 
     # -------------------------------------------------------------
