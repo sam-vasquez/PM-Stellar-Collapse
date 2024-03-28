@@ -69,7 +69,7 @@ if __name__ == "__main__":
     sim = GravitySimulation(Mp, RS, xc, Np, L, Nc, s)
 
     while sim_time.isnumeric():
-        sim.evolve_system(int(sim_time), verbose_level, debug_flag)
+        sim.evolve_system(int(sim_time), output_dir, verbose_level, debug_flag)
         sim_time = input("Enter another time to continue simulation, or enter any key to quit")
 
 

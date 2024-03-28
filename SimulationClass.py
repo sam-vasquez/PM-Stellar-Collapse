@@ -378,7 +378,7 @@ class GravitySimulation:
         # Future work - perhaps make an initialization parameter to choose distribution?
         self.grid.update_accelerations(self.parts)
 
-        self.dT = 0.5 # Placeholder value
+        self.dT = 2 # Placeholder value
         self.T = 0 # Current simulation time.
 
     # Return an array of particle pos,vel,acc.
@@ -442,9 +442,9 @@ class GravitySimulation:
     # verbose: 1 = output position visualization, 2 = output other visualizations.
     # debug: 1 = print time step info to console.
     # Future work - allow reverse evolution. Would that be useful for testing stability?
-    def evolve_system(self, sim_time, verbose=1, debug=0):
+    def evolve_system(self, sim_time, output_dir, verbose=1, debug=0):
         timesteps = int(sim_time // self.dT)
-        snapshot_steps = 5
+        snapshot_steps = 10
         
         for _ in range(timesteps // snapshot_steps):
             
@@ -457,6 +457,8 @@ class GravitySimulation:
 
             self.T += snapshot_steps*self.dT 
 
+            if verbose: self.output_positions(output_dir)
+
         self.initial_step()
 
         for _ in range(2, (timesteps % snapshot_steps) + 1):
@@ -465,6 +467,8 @@ class GravitySimulation:
         self.final_step(debug)
 
         self.T += (timesteps % snapshot_steps)*self.dT
+
+        if verbose: self.output_positions(output_dir)
 
         print(f"Advanced simulation by {timesteps} time steps. Current time: {self.T} seconds.")
 
@@ -492,7 +496,7 @@ class GravitySimulation:
     def display_forces(self, fit=False):
         self.grid.display_forces(self.parts, fit)
 
-    def display_positions(self):
+    def output_positions(self, output_dir):
         fig, axes = plt.subplots(nrows=1, ncols=2, figsize=(10,5))
         axes[0].scatter(self.parts[0], self.parts[1])
         axes[0].set_xlim(0,self.grid.L)
@@ -509,6 +513,10 @@ class GravitySimulation:
 
         plt.suptitle(f'x vs y and y vs z at time T = {self.T} seconds.')
         plt.tight_layout()
-        plt.show()
+
+        out = f"{output_dir}/output_{self.T}".strip(".")
+
+        plt.savefig(f"{out}.pdf",format="pdf",dpi=300)
+        plt.close()
 
 
