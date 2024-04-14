@@ -7,81 +7,158 @@ import sys
 from mpi4py import MPI
 from pathlib import Path
 
-from SimulationClass import GravitySimulation
+import numpy as np
+import numpy.random as random
+from numpy import cos, sin, pi
 
-# argv: Np, sim_time, output_level, output_dir, seed, debug
-if __name__ == "__main__":
-    # ------------------------------------------------------------
-    # Check Inputs
+#import SimulationMethods as sim
 
-    if len(sys.argv) < 5:
-        print("Usage: python main.py NumParticles SimulationTime VerboseLvl OutputDir [Seed] [Debug]")
-        exit(1)
+from SimulationMethods import GravitySimulation
 
-    if not sys.argv[1].isnumeric():
-        print("Argument 1 (Number of particles) must be an integer.")
-        exit(1)
-    Np = int(sys.argv[1])
+# -----------------------------------------------------------------------------
 
-    if not sys.argv[2].isnumeric():
-        print("Argument 2 (Simulation time) must be an integer.")
-        exit(1)
-    sim_time = sys.argv[2] # Not cast to integer just yet (important).
+# Uniform probability distribution functions over spherical coordinates. 
+def rand_r(Np,r_min,r_max,rng=random.default_rng()):
+    v_min = 1/3 * r_min**3
+    v_max = 1/3 * r_max**3
+    v = rng.uniform(v_min,v_max,Np)
+    return np.cbrt(3*v)
 
-    if not sys.argv[3].isnumeric():
-        print("Argument 3 (Verbose level) must be an integer.")
-        exit(1)
-    verbose_level = int(sys.argv[3])
+def rand_theta(Np,theta_min,theta_max,rng=random.default_rng()):
+    u_min = -cos(theta_min)
+    u_max = -cos(theta_max)
+    u = rng.uniform(u_min,u_max,Np)
+    return np.arccos(-u)
 
-    output_dir = Path(sys.argv[4]).resolve(strict=False)
+def rand_phi(N,phi_min,phi_max,rng=random.default_rng()):
+    phi = rng.uniform(0,2*pi,Np)
+    return phi
 
+def init_gbl_particle_array(Np):
+    return np.empty((9,Np))
+
+def init_distribution_sphere(parts, Np, xc, RS, rng):
+    rs = rand_r(Np, 0, RS, rng)
+    thetas = rand_theta(Np, 0, pi, rng)
+    phis = rand_phi(Np, 0, 2*pi, rng)
+
+    parts[0] = rs*cos(phis)*sin(thetas) + rc[0]
+    parts[1] = rs*sin(phis)*sin(thetas) + rc[1]
+    parts[2] = rs*cos(thetas) + rc[2]
+
+def validate_params(params_path):
+    params = []
+    with open(params_path, 'r') as f:
+        for line in f:
+            try:
+                float(line.split('#')[0].strip())
+            except ValueError:
+                print(f"Error in parameters file:{line.split('#')[1]} must be a number.")
+                params = None
+                break
+            params += [line.split('#')[0].strip()]
+    return params
+
+# argv: config_dir, output_dir, output_level, seed, debug
+def validate_inputs():
+    if len(sys.argv) < 4:
+        print("Usage: python main.py ParamsDir OutputDir VerboseLvl [Seed] [Debug]")
+        return None
+
+    params_dir = Path(sys.argv[1]).resolve(strict=False)
+    if not os.access(params_dir, os.R_OK):
+        print("Permission denied: Unable to read the specified config file.")
+        return None
+    
+    output_dir = Path(sys.argv[2]).resolve(strict=False)
     try:
         output_dir.mkdir(parents=True, exist_ok=True)
     except PermissionError:
-        print("Permission denied: Unable to create directory at specified path.")
-        exit(1)
-
+        print("Permission denied: Unable to create directory at specified output path.")
+        return None
     if not os.access(output_dir, os.W_OK):
-        print("Permission denied: Unable to write to the specified directory.")
-        exit(1)
+        print("Permission denied: Unable to write to the specified output directory.")
+        return None
+
+    try:
+        verbose_level = int(sys.argv[3])
+    except ValueError:
+        print("Argument 3 (Verbose level) must be an integer.")
+        return None
 
     s = None
-    if len(sys.argv) >= 6: 
-        if not sys.argv[5].isnumeric():
-            print("Argument 5 (RNG Seed) must be an integer.")
-            exit(1)
-        s = int(sys.argv[5])
+    if len(sys.argv) >= 5: 
+        try:
+            s = int(sys.argv[4])
+        except ValueError:
+            print("Argument 4 (RNG Seed) must be an integer.")
+            return None
 
     debug_flag = 0
-    if len(sys.argv) >= 7:
-        if not sys.argv[6].isnumeric():
-            print("Argument 6 (Debug flag) must be an integer.")
-            exit(1)
-        debug_flag = int(sys.argv[6])
+    if len(sys.argv) >= 6:
+        try:
+            debug_flag = int(sys.argv[5])
+        except ValueError:
+            print("Argument 5 (Debug flag) must be an integer.")
+            return None
+
+    return [params_dir, output_dir, verbose_level, s, debug_flag]
+
+def advance_simulation(sim, sim_time_str, output_dir, verbose_level, debug_flag):
+    try:
+        sim.evolve_system(float(sim_time_str), output_dir, verbose_level, debug_flag)
+        sim_time_str = input("Enter another time to continue simulation, or enter any key to quit\n")
+        advance_simulation(sim, sim_time_str, output_dir, verbose_level, debug_flag)
+    except ValueError:
+#        MPI.Finalize()
+        exit(0)
+
+if __name__ == "__main__":
+    # -------------------------------------------------------------
+    # Process Inputs
+   
+    args = validate_inputs()
+    if not args: exit(1)
+    params_dir = args[0]
+    output_dir = args[1]
+    verbose_level = args[2]
+    s = args[3]
+    debug_flag = args[4]
+
+
+    params = validate_params(params_dir)
+    if not params: exit(1)
+    Np = int(params[0])
+    Mp = float(params[1])
+    L = float(params[2])
+    Nc = int(params[3])
+    r_min = float(params[4])
+    r_max = float(params[5])
+    theta_min = float(params[6])
+    theta_max = float(params[7])
+    phi_min = float(params[8])
+    phi_max = float(params[9])
+    rcx = float(params[10])
+    rcy = float(params[11])
+    rcz = float(params[12])
+    rc = (rcx, rcy, rcz)
+
+    RS = L/4
 
     # -------------------------------------------------------------
-    # Simulation parameters that will be used by all tests.
+    # Set up parallel stuff.
 
-    # Mp: Mass of each particle. (kg)
-    # L: Side length of the (cubical) simulation space.(m)
-    # RS: Radius of the (spherical) collapsing body. (m)
-    # xc: Center of the body in simulation space. (m)
-    # Nc: Number of cells per axis.
-    # TODO: Move this to a simulation config file. 
-        
-    Mp = 0.1
-    L = 1
-    RS = L/4
-    xc = (L/2, L/2, L/2)
-    Nc = 128
+#    comm = MPI.COMM_WORLD
+#    world_size = comm.Get_size()
+#    my_rank = comm.Get_rank()
 
     # -------------------------------------------------------------
     # Begin Simulation
 
-    sim = GravitySimulation(Mp, RS, xc, Np, L, Nc, s)
+    sim = GravitySimulation(Mp, RS, rc, Np, L, Nc, s)
 
-    while sim_time.isnumeric():
-        sim.evolve_system(int(sim_time), output_dir, verbose_level, debug_flag)
-        sim_time = input("Enter another time to continue simulation, or enter any key to quit")
+    sim_time_str = input("Simulation successfully initialized. Enter a time to advance the system, or enter any key to quit\n")
+
+    advance_simulation(sim, sim_time_str, output_dir, verbose_level, debug_flag)
 
 

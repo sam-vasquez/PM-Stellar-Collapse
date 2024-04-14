@@ -1,0 +1,13 @@
+32768           # Number of particles
+0.1             # Mass of each particle (kg)
+1               # Side length of the cubical simulation space (m)
+128             # Number of cells per side
+0               # r_min
+0.25            # r_max
+0               # theta_min
+3.14            # theta_max
+0               # phi_min
+6.28            # phi_max
+0.5             # Center x
+0.5             # Center y
+0.5             # Center z
