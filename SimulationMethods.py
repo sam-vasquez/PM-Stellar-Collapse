@@ -1,3 +1,6 @@
+# Python
+import time
+
 # MPL
 import matplotlib        as mpl
 import matplotlib.pyplot as plt
@@ -422,9 +425,16 @@ class GravitySimulation:
     def evolve_system(self, sim_time, output_dir, verbose=1, debug=0):
         timesteps = int(sim_time // self.dT)
         snapshot_steps = 10
-        
+
+        avg_compute_time = 0
+        time1 = 0
+        time2 = 0
+
+        if debug:
+            time1 = time.time()
+
         for _ in range(timesteps // snapshot_steps):
-            
+
             self.initial_step()
 
             for _ in range(2, snapshot_steps+1):
@@ -435,7 +445,12 @@ class GravitySimulation:
             self.T += snapshot_steps*self.dT 
 
             if verbose:
+                if debug:
+                    time2 = time.time()
+                    avg_compute_time += time2 - time1
                 self.output_positions(output_dir)
+                if debug:
+                    time1 = time.time()
 
         self.initial_step()
 
@@ -446,10 +461,18 @@ class GravitySimulation:
 
         self.T += (timesteps % snapshot_steps)*self.dT
 
+        if debug:
+            time2 = time.time()
+            avg_compute_time += time2 - time1
+            avg_compute_time /= timesteps
+            avg_compute_time *= self.dT
+
         if verbose:
             self.output_positions(output_dir)
 
         print(f"Advanced simulation by {timesteps} time steps. Current time: {self.T} seconds.")
+        if debug:
+            print(f"Average computation time per simulation second: {avg_compute_time} seconds.")
 
 
     # A simple plot of the particle distribution in space.
