@@ -18,24 +18,6 @@ import pyfftw
 
 from mpi4py import MPI
 
-# Uniform probability distribution functions over spherical coordinates. 
-
-def rand_r(N,r_min,r_max,rng=random.default_rng()):
-    v_min = 1/3 * r_min**3
-    v_max = 1/3 * r_max**3
-    v = rng.uniform(v_min,v_max,N)
-    return np.cbrt(3*v)
-
-def rand_theta(N,theta_min,theta_max,rng=random.default_rng()):
-    u_min = -cos(theta_min)
-    u_max = -cos(theta_max)
-    u = rng.uniform(u_min,u_max,N)
-    return np.arccos(-u)
-
-def rand_phi(N,phi_min,phi_max,rng=random.default_rng()):
-    phi = rng.uniform(0,2*pi,N)
-    return phi
-
 # This class defines everything that has to do with the discretized simulation space.
 # In doing so these class methods perform the bulk of the work for this simulation.
 class Grid:
