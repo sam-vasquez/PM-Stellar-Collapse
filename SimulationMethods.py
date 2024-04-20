@@ -71,7 +71,8 @@ class Grid:
         G = 6.67e-11
 
         # Compute the gravitational kernel to implement the Poisson equation in k-space.
-        w = lambda i,j,k : -4 * pi * G / ((2*sin(i*pi/Nc))**2 + (2*sin(j*pi/Nc))**2 + (2*sin(k*pi/Nc))**2)
+        def w(i,j,k): 
+            return -4 * pi * G / ((2*sin(i*pi/Nc))**2 + (2*sin(j*pi/Nc))**2 + (2*sin(k*pi/Nc))**2)
         with np.errstate(divide='ignore'):
             self.wk = np.fromfunction(w, (Nc,Nc,Nc//2+1))
         self.wk[0,0,0] = 0
@@ -300,7 +301,8 @@ class Grid:
         cmz = np.average(array[2])
 
         # Get coordinates for each cell center, and calculate their distances from the center of mass.
-        celldist = lambda i,j,k : sqrt((cmx - (i+1/2)*self.dl)**2 + (cmy - (j+1/2)*self.dl)**2 + (cmz - (k+1/2)*self.dl)**2)
+        def celldist(i,j,k): 
+            return sqrt((cmx - (i+1/2)*self.dl)**2 + (cmy - (j+1/2)*self.dl)**2 + (cmz - (k+1/2)*self.dl)**2)
         celldists = np.fromfunction(celldist, (self.Nc,self.Nc,self.Nc))
 
         # Approximation of the body's radius.
@@ -354,49 +356,24 @@ class Grid:
         plt.legend()
         plt.show()
 
-        if fit: print(f"F_fit: {popt[0]:.3}\n Expected: {GM:.3}")
+        if fit:
+            print(f"F_fit: {popt[0]:.3}\n Expected: {GM:.3}")
 
 class GravitySimulation:
     # Mp: Mass of each particle. (kg)
-    # Future work - Allow random mass distributions?
-    # RS: Radius of the (spherical) collapsing body. (m)
-    # xc: Center of the body in simulation space. (m)
     # Np: Total number of particles in the simulation.
     # L: Side length of the (cubical) simulation space.(m)
     # Nc: Number of cells on each dimension of the simulation space lattice. (m)
-    # s: RNG seed.
-    def __init__(self, Mp, RS, xc, Np, L, Nc, s=None):
-        # Optional: Fix rng.
-        self.rng = random.default_rng()
-        if s: self.rng = random.default_rng(seed=s)
-
-        # Set up the initial positions, densities, and accelerations.
+    def __init__(self, parts, Np, Mp, L, Nc):
+        # Set up the simulation space.
         self.Mp = Mp
         self.grid = Grid(L,Nc,Np,Mp)
-        self.parts = self.init_particle_array(Np)
-        self.init_distribution_sphere(Np, xc, RS)
-        # Future work - perhaps make an initialization parameter to choose distribution?
+        self.parts = parts
+        
         self.grid.update_accelerations(self.parts)
 
         self.dT = 2 # Placeholder value
         self.T = 0 # Current simulation time.
-
-    # Return an array of particle pos,vel,acc.
-    # First index is pos info, Second index is particle number
-    # [0-2][N] is pos, [3-5][N] vel, [6-8][N] acc.
-    def init_particle_array(self, N):
-        return np.empty((9,N))
-
-    # Generate a spatial distribution of points forming a sphere.
-    # The sphere has radius R and is centered at rc = (xc,yc,zc).
-    def init_distribution_sphere(self, N, xc, RS):
-        rs = rand_r(N, 0, RS, self.rng)
-        thetas = rand_theta(N, 0, pi, self.rng)
-        phis = rand_phi(N, 0, 2*pi, self.rng)
-
-        self.parts[0] = rs*cos(phis)*sin(thetas) + xc[0]
-        self.parts[1] = rs*sin(phis)*sin(thetas) + xc[1]
-        self.parts[2] = rs*cos(thetas) + xc[2]
 
     def initial_step(self):
         # First kick
@@ -457,7 +434,8 @@ class GravitySimulation:
 
             self.T += snapshot_steps*self.dT 
 
-            if verbose: self.output_positions(output_dir)
+            if verbose:
+                self.output_positions(output_dir)
 
         self.initial_step()
 
@@ -468,7 +446,8 @@ class GravitySimulation:
 
         self.T += (timesteps % snapshot_steps)*self.dT
 
-        if verbose: self.output_positions(output_dir)
+        if verbose:
+            self.output_positions(output_dir)
 
         print(f"Advanced simulation by {timesteps} time steps. Current time: {self.T} seconds.")
 

@@ -16,48 +16,109 @@ from numpy import cos, sin, pi
 from SimulationMethods import GravitySimulation
 
 # -----------------------------------------------------------------------------
-
 # Uniform probability distribution functions over spherical coordinates. 
-def rand_r(Np,r_min,r_max,rng=random.default_rng()):
+
+def rand_r(N,r_min,r_max,rng=random.default_rng()):
     v_min = 1/3 * r_min**3
     v_max = 1/3 * r_max**3
-    v = rng.uniform(v_min,v_max,Np)
+    v = rng.uniform(v_min,v_max,N)
     return np.cbrt(3*v)
 
-def rand_theta(Np,theta_min,theta_max,rng=random.default_rng()):
+def rand_theta(N,theta_min,theta_max,rng=random.default_rng()):
     u_min = -cos(theta_min)
     u_max = -cos(theta_max)
-    u = rng.uniform(u_min,u_max,Np)
+    u = rng.uniform(u_min,u_max,N)
     return np.arccos(-u)
 
 def rand_phi(N,phi_min,phi_max,rng=random.default_rng()):
-    phi = rng.uniform(0,2*pi,Np)
+    phi = rng.uniform(0,2*pi,N)
     return phi
+
+# -----------------------------------------------------------------------------
+# Particle array generation
 
 def init_gbl_particle_array(Np):
     return np.empty((9,Np))
 
-def init_distribution_sphere(parts, Np, xc, RS, rng):
-    rs = rand_r(Np, 0, RS, rng)
-    thetas = rand_theta(Np, 0, pi, rng)
-    phis = rand_phi(Np, 0, 2*pi, rng)
+def init_distr_spherical(params, rng=random.default_rng()):
+    Np = int(params["PARTICLES"])
+    parts = init_gbl_particle_array(Np)
 
-    parts[0] = rs*cos(phis)*sin(thetas) + rc[0]
-    parts[1] = rs*sin(phis)*sin(thetas) + rc[1]
-    parts[2] = rs*cos(thetas) + rc[2]
+    r_min = params["R_MIN"]
+    r_max = params["R_MAX"]
+    theta_min = params["THETA_MIN"]
+    theta_max = params["THETA_MAX"]
+    phi_min = params["PHI_MIN"]
+    phi_max = params["PHI_MAX"]
+    rcx = params["CENTER_X"]
+    rcy = params["CENTER_Y"]
+    rcz = params["CENTER_Z"]
+    
+    rs = rand_r(Np, r_min, r_max, rng)
+    thetas = rand_theta(Np, theta_min, theta_max, rng)
+    phis = rand_phi(Np, phi_min, phi_max, rng)
 
-def validate_params(params_path):
-    params = []
+    parts[0] = rs*cos(phis)*sin(thetas) + rcx 
+    parts[1] = rs*sin(phis)*sin(thetas) + rcy 
+    parts[2] = rs*cos(thetas) + rcz
+
+    return parts
+
+# -----------------------------------------------------------------------------
+# Load system parameters and simulation control inputs
+
+def load_params(params_path):
+    gbl = {"LENGTH": 1, "CELLS": 128}
+    sphere = {"PARTICLES": 32768, 
+              "MASS": 0.1,
+              "R_MIN": 0,
+              "R_MAX": 0.25,
+              "THETA_MIN": 0,
+              "THETA_MAX": 3.14,
+              "PHI_MIN": 0,
+              "PHI_MAX": 6.28,
+              "CENTER_X": 0.5,
+              "CENTER_Y": 0.5,
+              "CENTER_Z": 0.5}
+
+    current_obj = gbl
+
     with open(params_path, 'r') as f:
         for line in f:
-            try:
-                float(line.split('#')[0].strip())
-            except ValueError:
-                print(f"Error in parameters file:{line.split('#')[1]} must be a number.")
-                params = None
-                break
-            params += [line.split('#')[0].strip()]
-    return params
+            if "[" in line:
+                if "]" not in line:
+                    print("Error in parameters file: Unclosed object tag.")
+                    break
+                match line[ line.index("[") + 1 : line.index("]") ].strip():
+                    case "Global":
+                        current_obj = gbl 
+                    case "Sphere":
+                        current_obj = sphere
+                    case _:
+                        print("Error in parameters file: Unsupported object.")
+                        break
+            elif not line.strip():
+                continue 
+            else:
+                if ":" not in line:
+                    print("Error in parameters file: Missing delineator.")
+                    break
+                key, val = line.split(":")
+                key = key.strip()
+                val = val.strip()
+                
+                try:
+                    current_obj[key] = float(val)
+                except KeyError:
+                    print(f"Error in parameters file: {key} not a valid parameter of object {current_obj['Type']}")
+                    current_obj = None
+                    break
+                except ValueError:
+                    print(f"Error in parameters file: {key} must be a number.")
+                    current_obj = None
+                    break
+
+    return gbl, sphere
 
 # argv: config_dir, output_dir, output_level, seed, debug
 def validate_inputs():
@@ -104,61 +165,68 @@ def validate_inputs():
 
     return [params_dir, output_dir, verbose_level, s, debug_flag]
 
+# -----------------------------------------------------------------------------
+# Run a time step.
+
 def advance_simulation(sim, sim_time_str, output_dir, verbose_level, debug_flag):
     try:
         sim.evolve_system(float(sim_time_str), output_dir, verbose_level, debug_flag)
         sim_time_str = input("Enter another time to continue simulation, or enter any key to quit\n")
         advance_simulation(sim, sim_time_str, output_dir, verbose_level, debug_flag)
     except ValueError:
-#        MPI.Finalize()
+        MPI.Finalize()
         exit(0)
+
+# -----------------------------------------------------------------------------
+# Main
 
 if __name__ == "__main__":
     # -------------------------------------------------------------
     # Process Inputs
    
     args = validate_inputs()
-    if not args: exit(1)
+    if not args: 
+        exit(1)
     params_dir = args[0]
     output_dir = args[1]
     verbose_level = args[2]
     s = args[3]
     debug_flag = args[4]
 
+    rng = random.default_rng(s)
 
-    params = validate_params(params_dir)
-    if not params: exit(1)
-    Np = int(params[0])
-    Mp = float(params[1])
-    L = float(params[2])
-    Nc = int(params[3])
-    r_min = float(params[4])
-    r_max = float(params[5])
-    theta_min = float(params[6])
-    theta_max = float(params[7])
-    phi_min = float(params[8])
-    phi_max = float(params[9])
-    rcx = float(params[10])
-    rcy = float(params[11])
-    rcz = float(params[12])
-    rc = (rcx, rcy, rcz)
+    gbl, sphere = load_params(params_dir)
+    if not gbl:
+        exit(1)
+    if not sphere:
+        exit(1)
 
-    RS = L/4
+    # -------------------------------------------------------------
+    # Generate global particle array
+
+    parts = init_distr_spherical(sphere, rng)
+
+    Np = int(sphere["PARTICLES"])
+    Mp = sphere["MASS"]
+
+    L = gbl["LENGTH"]
+    Nc = int(gbl["CELLS"])
 
     # -------------------------------------------------------------
     # Set up parallel stuff.
 
-#    comm = MPI.COMM_WORLD
-#    world_size = comm.Get_size()
-#    my_rank = comm.Get_rank()
+    comm = MPI.COMM_WORLD
+    world_size = comm.Get_size()
+    my_rank = comm.Get_rank()
 
     # -------------------------------------------------------------
-    # Begin Simulation
+    # Begin simulation
 
-    sim = GravitySimulation(Mp, RS, rc, Np, L, Nc, s)
+    if my_rank == 0:
+        sim = GravitySimulation(parts, Np, Mp, L, Nc)
 
-    sim_time_str = input("Simulation successfully initialized. Enter a time to advance the system, or enter any key to quit\n")
+        sim_time_str = input("Simulation successfully initialized. Enter a time to advance the system, or enter any key to quit\n")
 
-    advance_simulation(sim, sim_time_str, output_dir, verbose_level, debug_flag)
+        advance_simulation(sim, sim_time_str, output_dir, verbose_level, debug_flag)
 
 

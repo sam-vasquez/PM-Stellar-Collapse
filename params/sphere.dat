@@ -1,13 +1,16 @@
-32768           # Number of particles
-0.1             # Mass of each particle (kg)
-1               # Side length of the cubical simulation space (m)
-128             # Number of cells per side
-0               # r_min
-0.25            # r_max
-0               # theta_min
-3.14            # theta_max
-0               # phi_min
-6.28            # phi_max
-0.5             # Center x
-0.5             # Center y
-0.5             # Center z
+[Global]
+LENGTH: 1
+CELLS: 128
+
+[Sphere]
+PARTICLES: 32768
+MASS: 0.1
+R_MIN: 0
+R_MAX: 0.25
+THETA_MIN: 0
+THETA_MAX: 3.14
+PHI_MIN: 0
+PHI_MAX: 6.28
+CENTER_X: 0.5
+CENTER_Y: 0.5
+CENTER_Z: 0.5
