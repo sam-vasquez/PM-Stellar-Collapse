@@ -12,6 +12,11 @@ from numpy import cos, sin, pi
 #import SimulationMethods as sim
 
 from SimulationMethods import GravitySimulation
+from layout import RankLayout
+
+# ----------------------------------------------------------------------------- 
+# MPI Message Flags
+SENDPARTICLES = 1
 
 # -----------------------------------------------------------------------------
 # Uniform probability distribution functions over spherical coordinates. 
@@ -36,7 +41,7 @@ def rand_phi(N,phi_min,phi_max,rng=random.default_rng()):
 # Particle array generation
 
 def init_gbl_particle_array(Np):
-    return np.empty((9,Np))
+    return np.zeros((9,Np), dtype=np.float64)
 
 def init_distr_spherical(params, rng=random.default_rng()):
     Np = int(params["PARTICLES"])
@@ -179,12 +184,28 @@ def advance_simulation(sim, sim_time_str, output_dir, verbose_level, debug_flag)
 # Main
 
 if __name__ == "__main__":
-    # -------------------------------------------------------------
-    # Process Inputs
    
-    args = validate_inputs()
-    if not args: 
-        exit(1)
+    np.set_printoptions(precision=2)
+
+    # ----------------------------------------------------------------
+    # Set up parallel stuff.
+
+    comm = MPI.COMM_WORLD
+    world_size = comm.Get_size()
+    my_rank = comm.Get_rank()
+
+    # ----------------------------------------------------------------
+    # Process Inputs
+    
+    if my_rank == 0:
+        args = validate_inputs()
+        if not args: 
+            comm.Abort(1)
+    else:
+        args = None
+    
+    args = comm.bcast(args, root=0)
+
     params_dir = args[0]
     output_dir = args[1]
     verbose_level = args[2]
@@ -193,31 +214,56 @@ if __name__ == "__main__":
 
     rng = random.default_rng(s)
 
-    gbl, sphere = load_params(params_dir)
-    if not gbl:
-        exit(1)
-    if not sphere:
-        exit(1)
-
-    # -------------------------------------------------------------
-    # Generate global particle array
-
-    parts = init_distr_spherical(sphere, rng)
-
+    if my_rank == 0:
+        gbl, sphere = load_params(params_dir)
+        if not gbl:
+            comm.Abort(1)
+        if not sphere:
+            comm.Abort(1)
+    else:
+        sphere = None
+    
+    sphere = comm.bcast(sphere, root=0)
     Np = int(sphere["PARTICLES"])
     Mp = sphere["MASS"]
 
-    L = gbl["LENGTH"]
-    Nc = int(gbl["CELLS"])
+    # ----------------------------------------------------------------
+    # Generate global particle distribution
 
-    # -------------------------------------------------------------
-    # Set up parallel stuff.
+    if my_rank == 0:
+        parts = init_distr_spherical(sphere, rng)
+    lcl_parts = init_gbl_particle_array(Np)
 
-    comm = MPI.COMM_WORLD
-    world_size = comm.Get_size()
-    my_rank = comm.Get_rank()
+    # ----------------------------------------------------------------
+    # Distribute particles to local simulation slices.
+         
+    if my_rank == 0:
+        L = gbl["LENGTH"]
+        for i in range(world_size):
+            z_min = i * (L/world_size)
+            z_max = z_min + (L/world_size)
+            mask = np.logical_and(parts[2] > z_min, parts[2] < z_max)
+            send_parts = np.where(mask, parts, 0)
+            print(send_parts.flags)
+            if i == 0:
+                lcl_parts = send_parts
+            else:
+                comm.Send([send_parts,MPI.DOUBLE], dest=i, tag=SENDPARTICLES)
+    else:
+        comm.Recv([lcl_parts,MPI.DOUBLE], source=0, tag=SENDPARTICLES)
 
-    # -------------------------------------------------------------
+    # ----------------------------------------------------------------
+    # Map ranks to the global grid. RankLayout defaults to x-y slabs.
+
+    #if my_rank == 0:
+    #    Nc = int(gbl["CELLS"])
+    #    try:
+    #        layout = RankLayout([Nc,Nc,Nc], world_size)
+    #    except ValueError as e:
+    #        print(e)
+    #        comm.Abort()
+
+    # ----------------------------------------------------------------
     # Begin simulation
 
     if my_rank == 0:
